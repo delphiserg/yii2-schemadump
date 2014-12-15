@@ -21,6 +21,7 @@ use yii\db\Connection;
  */
 class SchemaDumpController extends Controller
 {
+
     /**
      * @inheritdoc
      */
@@ -37,26 +38,30 @@ class SchemaDumpController extends Controller
     public $db = 'db';
 
     /**
+     * @var type dump file, app root folder by default
+     */
+    public $dumpFile = 'dump.txt';
+    /**
      * @var array the column types
      * @see \yii\db\Schema
      */
     private $type = [
-        'pk'        => 'Schema::TYPE_PK',
-        'bigpk'     => 'Schema::TYPE_BIGPK',
-        'string'    => 'Schema::TYPE_STRING',
-        'text'      => 'Schema::TYPE_TEXT',
-        'smallint'  => 'Schema::TYPE_SMALLINT',
-        'integer'   => 'Schema::TYPE_INTEGER',
-        'bigint'    => 'Schema::TYPE_BIGINT',
-        'float'     => 'Schema::TYPE_FLOAT',
-        'decimal'   => 'Schema::TYPE_DECIMAL',
-        'datetime'  => 'Schema::TYPE_DATETIME',
+        'pk' => 'Schema::TYPE_PK',
+        'bigpk' => 'Schema::TYPE_BIGPK',
+        'string' => 'Schema::TYPE_STRING',
+        'text' => 'Schema::TYPE_TEXT',
+        'smallint' => 'Schema::TYPE_SMALLINT',
+        'integer' => 'Schema::TYPE_INTEGER',
+        'bigint' => 'Schema::TYPE_BIGINT',
+        'float' => 'Schema::TYPE_FLOAT',
+        'decimal' => 'Schema::TYPE_DECIMAL',
+        'datetime' => 'Schema::TYPE_DATETIME',
         'timestamp' => 'Schema::TYPE_TIMESTAMP',
-        'time'      => 'Schema::TYPE_TIME',
-        'date'      => 'Schema::TYPE_DATE',
-        'binary'    => 'Schema::TYPE_BINARY',
-        'boolean'   => 'Schema::TYPE_BOOLEAN',
-        'money'     => 'Schema::TYPE_MONEY',
+        'time' => 'Schema::TYPE_TIME',
+        'date' => 'Schema::TYPE_DATE',
+        'binary' => 'Schema::TYPE_BINARY',
+        'boolean' => 'Schema::TYPE_BOOLEAN',
+        'money' => 'Schema::TYPE_MONEY',
     ];
 
     /**
@@ -65,8 +70,7 @@ class SchemaDumpController extends Controller
     public function options($actionID)
     {
         return array_merge(
-            parent::options($actionID),
-            ['migrationTable', 'db']
+            parent::options($actionID), ['migrationTable', 'db']
         );
     }
 
@@ -113,13 +117,29 @@ class SchemaDumpController extends Controller
             if (!empty($table->primaryKey)) {
                 if (count($table->primaryKey) >= 2) {
                     $stdout .= "    'PRIMARY KEY (" . implode(', ', $table->primaryKey) . ")',\n";
-
                 } elseif (false === strpos($stdout, $this->type['pk'], $offset) && false === strpos($stdout, $this->type['bigpk'], $offset)) {
                     $stdout .= "    'PRIMARY KEY ({$table->primaryKey[0]})',\n";
                 }
             }
 
             $stdout .= "], \$this->tableOptions);\n\n";
+            $rows = (new \yii\db\Query())
+                ->select('*')
+                ->from($table->name)
+                ->all();
+            if ($rows) {
+                $stdout .= "// $table->name data\n";
+            }
+            //$stdout .= \yii\helpers\VarDumper::dump($rows) . '\n\n';*/
+            foreach ($rows as $row) {
+                $stdout .= "\$this->insert('{{%$table->name}}', [\n";
+                foreach ($row as $key => $value) {
+                    if (!is_null($value)) {
+                        $stdout .= "    '" . $key . "' => '" . $value . "',\n";
+                    }
+                }
+                $stdout .= "]);\n\n";
+            }
             $offset = mb_strlen($stdout, Yii::$app->charset);
         }
 
@@ -127,6 +147,8 @@ class SchemaDumpController extends Controller
             $stdout .= $this->generateForeignKey($table);
         }
 
+        $file =  file_put_contents($this->dumpFile, $stdout);
+        
         $this->stdout(strtr($stdout, [
             ' . ""' => '',
             '" . "' => '',
@@ -213,17 +235,14 @@ class SchemaDumpController extends Controller
 
         if ($column->allowNull) {
             $definition .= ' NULL';
-
         } elseif (!$column->autoIncrement) {
             $definition .= ' NOT NULL';
-
         } elseif ($column->autoIncrement && $column->unsigned) {
             $definition .= ' NOT NULL AUTO_INCREMENT';
         }
 
         if ($column->defaultValue instanceof \yii\db\Expression) {
             $definition .= " DEFAULT $column->defaultValue";
-
         } elseif ($column->defaultValue !== null) {
             $definition .= " DEFAULT '$column->defaultValue'";
         }
@@ -270,4 +289,5 @@ class SchemaDumpController extends Controller
 
         return "$stdout\n";
     }
+
 }
